@@ -8,10 +8,11 @@ from faultspicker.models import UNet3D
 class FaultsPicker():
     def __init__(self):
         self.model = None
+        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     def load_model(self, model_path):
         self.model = UNet3D()
-        self.model.load_state_dict(torch.load(model_path))
+        self.model.load_state_dict(torch.load(model_path, map_location=self.device))
 
     def train(self, train_loader, valid_loader, num_epochs=100, criterion=None, optimizer=None, save_path='model/best_model.pth', return_model=False):
         if self.model is None:
@@ -30,7 +31,7 @@ class FaultsPicker():
             for batch_idx, (data, target) in enumerate(train_loader):
                 data, target = data.to(device), target.to(device)
                 optimizer.zero_grad()
-                output = model(data)
+                output = self.model(data)
                 loss = criterion(output, target)
                 loss.backward()
                 optimizer.step()
@@ -42,7 +43,7 @@ class FaultsPicker():
             with torch.no_grad():
                 for data, target in valid_loader:
                     data, target = data.to(device), target.to(device)
-                    output = model(data)
+                    output = self.model(data)
                     valid_loss += criterion(output, target).item()
             
             train_loss /= len(train_loader)
@@ -63,9 +64,8 @@ class FaultsPicker():
     def predict(self, seismic_data):
         if self.model is None:
             raise Exception('Model not loaded. Use load_model to load a model or run train to train a model.')
-        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        seismic_data = torch.FloatTensor(seismic_data).to(device)
-        self.model.to(device)
+        seismic_data = torch.FloatTensor(seismic_data).to(self.device)
+        self.model.to(self.device)
         self.model.eval()
         with torch.no_grad():
             prediction = self.model(seismic_data)
